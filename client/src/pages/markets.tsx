@@ -73,7 +73,7 @@ export default function Markets() {
     })
     .sort((a, b) => b.suspiciousWalletCount - a.suspiciousWalletCount);
 
-  const categories = [...new Set(markets?.map((m) => m.category) ?? [])];
+  const categories = Array.from(new Set(markets?.map((m) => m.category) ?? []));
 
   return (
     <div className="space-y-6">

@@ -12,30 +12,9 @@ import {
   type RiskFactors,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { type IStorage } from "./storage-interface";
 
-export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-
-  getWallets(): Promise<Wallet[]>;
-  getFlaggedWallets(): Promise<Wallet[]>;
-  getHistoricalWallets(): Promise<Wallet[]>;
-  getWallet(id: string): Promise<Wallet | undefined>;
-  getWalletWithTransactions(id: string): Promise<WalletWithTransactions | undefined>;
-  getWalletRiskFactors(id: string): Promise<RiskFactors | undefined>;
-  createWallet(wallet: InsertWallet): Promise<Wallet>;
-
-  getMarkets(): Promise<Market[]>;
-  getMarket(id: string): Promise<Market | undefined>;
-  createMarket(market: InsertMarket): Promise<Market>;
-
-  getTransactions(): Promise<Transaction[]>;
-  getTransactionsByWallet(walletId: string): Promise<Transaction[]>;
-  createTransaction(transaction: InsertTransaction): Promise<Transaction>;
-
-  getDashboardStats(): Promise<DashboardStats>;
-}
+export type { IStorage };
 
 function generateWalletAddress(): string {
   const chars = "0123456789abcdef";
@@ -180,25 +159,26 @@ export class MemStorage implements IStorage {
     const createdWallets: Wallet[] = [];
     walletProfiles.forEach((profile) => {
       const id = randomUUID();
-      const walletData: InsertWallet = {
+      const walletMetrics = {
+        accountAgeDays: profile.ageDays,
+        winRate: profile.winRate,
+        portfolioConcentration: profile.concentration,
+        avgTimingProximity: profile.timing,
+      };
+
+      const riskScore = calculateRiskScore(walletMetrics);
+      const wallet: Wallet = {
+        id,
         address: generateWalletAddress(),
+        riskScore,
         winRate: profile.winRate,
         totalBets: profile.bets,
         totalVolume: profile.volume,
         accountAgeDays: profile.ageDays,
         portfolioConcentration: profile.concentration,
         avgTimingProximity: profile.timing,
-        isFlagged: true,
-        notes: null,
-        riskScore: 0,
-      };
-
-      const riskScore = calculateRiskScore(walletData);
-      const wallet: Wallet = {
-        id,
-        ...walletData,
-        riskScore,
         isFlagged: riskScore >= 40,
+        notes: null,
       };
 
       this.wallets.set(id, wallet);
@@ -319,9 +299,16 @@ export class MemStorage implements IStorage {
     const riskScore = calculateRiskScore(insertWallet);
     const wallet: Wallet = {
       id,
-      ...insertWallet,
+      address: insertWallet.address,
       riskScore,
+      winRate: insertWallet.winRate ?? 0,
+      totalBets: insertWallet.totalBets ?? 0,
+      totalVolume: insertWallet.totalVolume ?? 0,
+      accountAgeDays: insertWallet.accountAgeDays ?? 0,
+      portfolioConcentration: insertWallet.portfolioConcentration ?? 0,
+      avgTimingProximity: insertWallet.avgTimingProximity ?? 72,
       isFlagged: riskScore >= 40,
+      notes: insertWallet.notes ?? null,
     };
     this.wallets.set(id, wallet);
     return wallet;
@@ -341,7 +328,9 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const market: Market = {
       id,
-      ...insertMarket,
+      name: insertMarket.name,
+      category: insertMarket.category,
+      resolutionTime: insertMarket.resolutionTime ?? null,
       suspiciousWalletCount: insertMarket.suspiciousWalletCount ?? 0,
       avgRiskScore: insertMarket.avgRiskScore ?? 0,
       totalVolume: insertMarket.totalVolume ?? 0,
@@ -367,8 +356,14 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const transaction: Transaction = {
       id,
-      ...insertTransaction,
+      walletId: insertTransaction.walletId,
+      marketId: insertTransaction.marketId,
+      amount: insertTransaction.amount,
+      direction: insertTransaction.direction,
       timestamp: insertTransaction.timestamp ?? new Date(),
+      hoursBeforeResolution: insertTransaction.hoursBeforeResolution ?? null,
+      won: insertTransaction.won ?? null,
+      priceImpact: insertTransaction.priceImpact ?? null,
     };
     this.transactions.set(id, transaction);
     return transaction;
@@ -388,4 +383,13 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { PolymarketStorage } from "./polymarket-storage";
+
+// Use live Polymarket data by default, fall back to mock data with MOCK_DATA=true
+const useLiveData = process.env.MOCK_DATA !== "true";
+
+export const storage: IStorage = useLiveData
+  ? new PolymarketStorage()
+  : new MemStorage();
+
+console.log(`[Storage] Using ${useLiveData ? "LIVE Polymarket" : "MOCK"} data mode`);
