@@ -1,0 +1,56 @@
+Here's how I'd frame it for an AI coding assistant:
+
+## Project Overview
+
+Build a **Polymarket insider trading detection dashboard** that analyzes on-chain data to identify suspicious betting patterns indicating potential information asymmetry.
+
+## Core Functionality
+
+**Data Pipeline:**
+- Pull transaction data from Polygon blockchain for Polymarket contracts
+- Track wallet addresses, bet sizes, timestamps, market outcomes
+- Store historical data for pattern analysis (PostgreSQL or similar)
+
+**Detection Algorithm:**
+Create a risk scoring system that flags wallets based on:
+- Account age vs. position size (new accounts with large bets score higher)
+- Win rate on early bets (>70% accuracy in first 5 bets is suspicious)
+- Portfolio concentration (single market >60% of capital)
+- Timing proximity to outcome resolution (<72 hours)
+- Price impact tolerance (accepting unfavorable slippage suggests urgency)
+
+**Dashboard UI:**
+- Real-time feed of flagged suspicious wallets with risk scores
+- Wallet detail view: full transaction history, markets entered, timing analysis
+- Market-level view: which markets are attracting suspicious whale activity
+- Historical leaderboard: wallets with highest insider probability scores that won
+
+## Technical Stack Suggestion
+
+**Backend:** Node.js or Python
+- Ethers.js/Web3.py for blockchain queries
+- Scheduled jobs to poll new transactions every 15 minutes
+- RESTful API serving scored wallet data
+
+**Frontend:** React + data viz library (Recharts, D3)
+- Real-time updating table of flagged wallets
+- Interactive charts showing bet timing vs. event resolution
+- Filterable by market category, risk score, position size
+
+**Data:** 
+- Polymarket uses Polygon mainnet
+- Contract addresses are public, transactions queryable via Polygonscan API or direct RPC
+- You'll need to decode transaction data to extract bet details
+
+## Key Edge Cases
+
+- Distinguish between insiders and legitimately skilled analysts
+- Handle wallets that split positions across multiple addresses
+- Account for market makers vs. directional traders
+- Flag coordinated activity (multiple new wallets betting same direction)
+
+## MVP Scope
+
+Start with: scrape last 30 days of Polymarket data, implement basic risk scoring (wallet age + position size + win rate), display top 20 suspicious wallets in a simple table. Build from there.
+
+The interesting part is tuning the scoring algorithm - you'll likely need to iterate based on what patterns actually correlate with proven insider cases.
