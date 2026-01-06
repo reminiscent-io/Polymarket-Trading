@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,3 +16,72 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export const wallets = pgTable("wallets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  address: text("address").notNull().unique(),
+  riskScore: integer("risk_score").notNull().default(0),
+  winRate: real("win_rate").notNull().default(0),
+  totalBets: integer("total_bets").notNull().default(0),
+  totalVolume: real("total_volume").notNull().default(0),
+  accountAgeDays: integer("account_age_days").notNull().default(0),
+  portfolioConcentration: real("portfolio_concentration").notNull().default(0),
+  avgTimingProximity: integer("avg_timing_proximity").notNull().default(72),
+  isFlagged: boolean("is_flagged").notNull().default(false),
+  notes: text("notes"),
+});
+
+export const insertWalletSchema = createInsertSchema(wallets).omit({ id: true });
+export type InsertWallet = z.infer<typeof insertWalletSchema>;
+export type Wallet = typeof wallets.$inferSelect;
+
+export const markets = pgTable("markets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  resolutionTime: timestamp("resolution_time"),
+  suspiciousWalletCount: integer("suspicious_wallet_count").notNull().default(0),
+  avgRiskScore: real("avg_risk_score").notNull().default(0),
+  totalVolume: real("total_volume").notNull().default(0),
+  isResolved: boolean("is_resolved").notNull().default(false),
+});
+
+export const insertMarketSchema = createInsertSchema(markets).omit({ id: true });
+export type InsertMarket = z.infer<typeof insertMarketSchema>;
+export type Market = typeof markets.$inferSelect;
+
+export const transactions = pgTable("transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  walletId: varchar("wallet_id").notNull(),
+  marketId: varchar("market_id").notNull(),
+  amount: real("amount").notNull(),
+  direction: text("direction").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  hoursBeforeResolution: integer("hours_before_resolution"),
+  won: boolean("won"),
+  priceImpact: real("price_impact").default(0),
+});
+
+export const insertTransactionSchema = createInsertSchema(transactions).omit({ id: true });
+export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
+export type Transaction = typeof transactions.$inferSelect;
+
+export interface DashboardStats {
+  totalFlaggedToday: number;
+  highRiskCount: number;
+  activeMarketsMonitored: number;
+  detectionAccuracy: number;
+}
+
+export interface WalletWithTransactions extends Wallet {
+  transactions: Transaction[];
+  markets: Market[];
+}
+
+export interface RiskFactors {
+  accountAge: number;
+  winRate: number;
+  portfolioConcentration: number;
+  timingProximity: number;
+  positionSize: number;
+}
