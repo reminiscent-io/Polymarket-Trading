@@ -15,6 +15,8 @@ import {
   type DashboardStats,
   type WalletWithTransactions,
   type RiskFactors,
+  type EarningsInsiderAlert,
+  type EarningsStats,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -39,4 +41,8 @@ export interface IStorage {
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
 
   getDashboardStats(): Promise<DashboardStats>;
+
+  // Earnings Insider Detection
+  getEarningsAlerts(): Promise<EarningsInsiderAlert[]>;
+  getEarningsStats(): Promise<EarningsStats>;
 }

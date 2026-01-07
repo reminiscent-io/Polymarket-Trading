@@ -24,6 +24,7 @@ export const wallets = pgTable("wallets", {
   winRate: real("win_rate").notNull().default(0),
   totalBets: integer("total_bets").notNull().default(0),
   totalVolume: real("total_volume").notNull().default(0),
+  currentPositionValue: real("current_position_value").notNull().default(0),
   accountAgeDays: integer("account_age_days").notNull().default(0),
   portfolioConcentration: real("portfolio_concentration").notNull().default(0),
   avgTimingProximity: integer("avg_timing_proximity").notNull().default(72),
@@ -84,4 +85,47 @@ export interface RiskFactors {
   portfolioConcentration: number;
   timingProximity: number;
   positionSize: number;
+}
+
+// Earnings Insider Detection types
+export interface EarningsEvent {
+  symbol: string;
+  companyName: string;
+  earningsDate: string;
+  earningsTime: "bmo" | "amc" | "unknown";
+  estimatedEps: number | null;
+  actualEps: number | null;
+  beatProbability: number | null;
+  revenue: number | null;
+}
+
+export interface EarningsRiskFactors {
+  divergenceScore: number;
+  whaleActivityScore: number;
+  timingUrgencyScore: number;
+  volumeAnomalyScore: number;
+}
+
+export interface EarningsInsiderAlert {
+  id: string;
+  symbol: string;
+  companyName: string;
+  earningsDate: string;
+  daysUntilEarnings: number;
+  insiderRiskScore: number;
+  polymarketOdds: number;
+  analystConsensus: number | null;
+  divergence: number;
+  suspiciousWhaleCount: number;
+  volumeRatio: number;
+  matchedMarketId: string | null;
+  matchedMarketQuestion: string | null;
+  riskFactors: EarningsRiskFactors;
+}
+
+export interface EarningsStats {
+  totalEarningsTracked: number;
+  matchedMarketsCount: number;
+  highRiskAlertsCount: number;
+  avgDivergence: number;
 }

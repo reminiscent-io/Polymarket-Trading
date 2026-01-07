@@ -61,12 +61,13 @@ export interface PolymarketPosition {
   asset: string;
   conditionId: string;
   size: number;
-  avgPrice: number;
-  currentPrice: number;
-  title: string;
-  outcome: string;
-  outcomeIndex: number;
-  unrealizedPnl: number;
+  value: number;
+  avgPrice?: number;
+  currentPrice?: number;
+  title?: string;
+  outcome?: string;
+  outcomeIndex?: number;
+  unrealizedPnl?: number;
 }
 
 // Cache configuration
@@ -278,6 +279,51 @@ class PolymarketClient {
    */
   async getMarketTrades(conditionId: string, limit: number = 500): Promise<PolymarketTrade[]> {
     return this.getTrades({ market: conditionId, limit });
+  }
+
+  /**
+   * Get current positions for a wallet address
+   */
+  async getWalletPositions(walletAddress: string): Promise<PolymarketPosition[]> {
+    const params = new URLSearchParams({
+      user: walletAddress,
+    });
+
+    const url = `${this.DATA_API}/positions?${params}`;
+    console.log(`[Polymarket] Fetching positions for ${walletAddress.slice(0, 10)}...`);
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "InsiderTradingDetector/1.0",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Data API error: ${response.status} ${response.statusText}`);
+      }
+
+      const positions = await response.json() as PolymarketPosition[];
+      console.log(`[Polymarket] Fetched ${positions.length} positions`);
+      return positions;
+    } catch (error) {
+      console.error("[Polymarket] Failed to fetch positions:", error);
+      return []; // Return empty array on error instead of throwing
+    }
+  }
+
+  /**
+   * Calculate total position value for a wallet
+   */
+  async getWalletPositionValue(walletAddress: string): Promise<number> {
+    try {
+      const positions = await this.getWalletPositions(walletAddress);
+      return positions.reduce((total, pos) => total + (pos.value || 0), 0);
+    } catch (error) {
+      console.error("[Polymarket] Failed to calculate position value:", error);
+      return 0;
+    }
   }
 
   /**

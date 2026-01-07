@@ -48,6 +48,7 @@ function WalletsSkeleton() {
 export default function Wallets() {
   const [searchQuery, setSearchQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState<string>("all");
+  const [volumeFilter, setVolumeFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("risk");
 
   const { data: wallets, isLoading } = useQuery<Wallet[]>({
@@ -67,6 +68,12 @@ export default function Wallets() {
       if (riskFilter === "high" && (wallet.riskScore < 60 || wallet.riskScore >= 80)) return false;
       if (riskFilter === "medium" && (wallet.riskScore < 40 || wallet.riskScore >= 60)) return false;
       if (riskFilter === "low" && wallet.riskScore >= 40) return false;
+
+      if (volumeFilter === "large" && wallet.totalVolume < 10000) return false;
+      if (volumeFilter === "medium" && (wallet.totalVolume < 2500 || wallet.totalVolume >= 10000)) return false;
+      if (volumeFilter === "small" && (wallet.totalVolume < 500 || wallet.totalVolume >= 2500)) return false;
+      if (volumeFilter === "micro" && wallet.totalVolume >= 500) return false;
+
       return true;
     })
     .sort((a, b) => {
@@ -120,6 +127,19 @@ export default function Wallets() {
               <SelectItem value="low">Low (&lt;40)</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={volumeFilter} onValueChange={setVolumeFilter}>
+            <SelectTrigger className="w-36" data-testid="select-volume-filter">
+              <WalletIcon className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Volume" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Volumes</SelectItem>
+              <SelectItem value="large">Large (≥$10k)</SelectItem>
+              <SelectItem value="medium">Medium ($2.5k-$10k)</SelectItem>
+              <SelectItem value="small">Small ($500-$2.5k)</SelectItem>
+              <SelectItem value="micro">Micro (&lt;$500)</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={sortBy} onValueChange={setSortBy}>
             <SelectTrigger className="w-36" data-testid="select-sort">
               <SlidersHorizontal className="mr-2 h-4 w-4" />
@@ -157,6 +177,9 @@ export default function Wallets() {
                     Total Volume
                   </TableHead>
                   <TableHead className="text-xs font-medium uppercase tracking-wide">
+                    Current Position
+                  </TableHead>
+                  <TableHead className="text-xs font-medium uppercase tracking-wide">
                     Account Age
                   </TableHead>
                   <TableHead className="text-xs font-medium uppercase tracking-wide">
@@ -191,6 +214,11 @@ export default function Wallets() {
                     <TableCell>
                       <span className="font-mono text-sm">
                         ${wallet.totalVolume.toLocaleString()}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono text-sm">
+                        ${(wallet.currentPositionValue || 0).toLocaleString()}
                       </span>
                     </TableCell>
                     <TableCell>

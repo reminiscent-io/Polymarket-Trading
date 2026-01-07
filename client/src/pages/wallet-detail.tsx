@@ -160,7 +160,7 @@ export default function WalletDetail() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
@@ -180,6 +180,17 @@ export default function WalletDetail() {
                 </div>
                 <p className="text-2xl font-bold font-mono mt-1" data-testid="stat-total-bets">
                   {wallet.totalBets}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Position</span>
+                </div>
+                <p className="text-2xl font-bold font-mono mt-1" data-testid="stat-position">
+                  ${(wallet.currentPositionValue || 0).toLocaleString()}
                 </p>
               </CardContent>
             </Card>

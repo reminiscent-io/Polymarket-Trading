@@ -10,6 +10,8 @@ import {
   type DashboardStats,
   type WalletWithTransactions,
   type RiskFactors,
+  type EarningsInsiderAlert,
+  type EarningsStats,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { type IStorage } from "./storage-interface";
@@ -28,25 +30,36 @@ function generateWalletAddress(): string {
 function calculateRiskScore(wallet: Partial<InsertWallet>): number {
   let score = 0;
 
+  // Account Age (0-20 points)
   const ageDays = wallet.accountAgeDays ?? 30;
-  if (ageDays < 7) score += 25;
-  else if (ageDays < 14) score += 20;
-  else if (ageDays < 30) score += 10;
+  if (ageDays < 7) score += 20;
+  else if (ageDays < 14) score += 15;
+  else if (ageDays < 30) score += 8;
 
+  // Win Rate (0-20 points)
   const winRate = wallet.winRate ?? 0.5;
-  if (winRate > 0.85) score += 25;
-  else if (winRate > 0.7) score += 20;
-  else if (winRate > 0.6) score += 10;
+  if (winRate > 0.85) score += 20;
+  else if (winRate > 0.7) score += 15;
+  else if (winRate > 0.6) score += 8;
 
+  // Portfolio Concentration (0-20 points)
   const concentration = wallet.portfolioConcentration ?? 0.3;
-  if (concentration > 0.8) score += 25;
-  else if (concentration > 0.6) score += 20;
-  else if (concentration > 0.4) score += 10;
+  if (concentration > 0.8) score += 20;
+  else if (concentration > 0.6) score += 15;
+  else if (concentration > 0.4) score += 8;
 
+  // Timing Proximity (0-20 points)
   const timing = wallet.avgTimingProximity ?? 72;
-  if (timing < 24) score += 25;
-  else if (timing < 48) score += 20;
-  else if (timing < 72) score += 10;
+  if (timing < 24) score += 20;
+  else if (timing < 48) score += 15;
+  else if (timing < 72) score += 8;
+
+  // Position Size (0-20 points)
+  const volume = wallet.totalVolume ?? 0;
+  if (volume >= 10000) score += 20;
+  else if (volume >= 2500) score += 15;
+  else if (volume >= 500) score += 8;
+  // < $500 gets 0 points (low risk)
 
   return Math.min(100, score);
 }
@@ -54,34 +67,40 @@ function calculateRiskScore(wallet: Partial<InsertWallet>): number {
 function calculateRiskFactors(wallet: Wallet): RiskFactors {
   const ageDays = wallet.accountAgeDays;
   let accountAge = 0;
-  if (ageDays < 7) accountAge = 25;
-  else if (ageDays < 14) accountAge = 20;
-  else if (ageDays < 30) accountAge = 10;
+  if (ageDays < 7) accountAge = 20;
+  else if (ageDays < 14) accountAge = 15;
+  else if (ageDays < 30) accountAge = 8;
 
   const wr = wallet.winRate;
   let winRateScore = 0;
-  if (wr > 0.85) winRateScore = 25;
-  else if (wr > 0.7) winRateScore = 20;
-  else if (wr > 0.6) winRateScore = 10;
+  if (wr > 0.85) winRateScore = 20;
+  else if (wr > 0.7) winRateScore = 15;
+  else if (wr > 0.6) winRateScore = 8;
 
   const concentration = wallet.portfolioConcentration;
   let concentrationScore = 0;
-  if (concentration > 0.8) concentrationScore = 25;
-  else if (concentration > 0.6) concentrationScore = 20;
-  else if (concentration > 0.4) concentrationScore = 10;
+  if (concentration > 0.8) concentrationScore = 20;
+  else if (concentration > 0.6) concentrationScore = 15;
+  else if (concentration > 0.4) concentrationScore = 8;
 
   const timing = wallet.avgTimingProximity;
   let timingScore = 0;
-  if (timing < 24) timingScore = 25;
-  else if (timing < 48) timingScore = 20;
-  else if (timing < 72) timingScore = 10;
+  if (timing < 24) timingScore = 20;
+  else if (timing < 48) timingScore = 15;
+  else if (timing < 72) timingScore = 8;
+
+  const volume = wallet.totalVolume;
+  let positionSizeScore = 0;
+  if (volume >= 10000) positionSizeScore = 20;
+  else if (volume >= 2500) positionSizeScore = 15;
+  else if (volume >= 500) positionSizeScore = 8;
 
   return {
     accountAge,
     winRate: winRateScore,
     portfolioConcentration: concentrationScore,
     timingProximity: timingScore,
-    positionSize: Math.floor(Math.random() * 10) + 5,
+    positionSize: positionSizeScore,
   };
 }
 
@@ -167,6 +186,8 @@ export class MemStorage implements IStorage {
       };
 
       const riskScore = calculateRiskScore(walletMetrics);
+      // Generate realistic position value (20-60% of total volume for active wallets)
+      const positionValueRatio = 0.2 + Math.random() * 0.4;
       const wallet: Wallet = {
         id,
         address: generateWalletAddress(),
@@ -174,6 +195,7 @@ export class MemStorage implements IStorage {
         winRate: profile.winRate,
         totalBets: profile.bets,
         totalVolume: profile.volume,
+        currentPositionValue: Math.floor(profile.volume * positionValueRatio),
         accountAgeDays: profile.ageDays,
         portfolioConcentration: profile.concentration,
         avgTimingProximity: profile.timing,
@@ -304,6 +326,7 @@ export class MemStorage implements IStorage {
       winRate: insertWallet.winRate ?? 0,
       totalBets: insertWallet.totalBets ?? 0,
       totalVolume: insertWallet.totalVolume ?? 0,
+      currentPositionValue: insertWallet.currentPositionValue ?? 0,
       accountAgeDays: insertWallet.accountAgeDays ?? 0,
       portfolioConcentration: insertWallet.portfolioConcentration ?? 0,
       avgTimingProximity: insertWallet.avgTimingProximity ?? 72,
@@ -379,6 +402,155 @@ export class MemStorage implements IStorage {
       highRiskCount: highRisk.length,
       activeMarketsMonitored: markets.length,
       detectionAccuracy: 87,
+    };
+  }
+
+  // Mock earnings data for development/testing
+  async getEarningsAlerts(): Promise<EarningsInsiderAlert[]> {
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+
+    return [
+      {
+        id: "AAPL-mock-1",
+        symbol: "AAPL",
+        companyName: "Apple Inc.",
+        earningsDate: new Date(now + 5 * day).toISOString().split("T")[0],
+        daysUntilEarnings: 5,
+        insiderRiskScore: 72,
+        polymarketOdds: 0.68,
+        analystConsensus: 0.45,
+        divergence: 0.23,
+        suspiciousWhaleCount: 3,
+        volumeRatio: 2.8,
+        matchedMarketId: "mock-market-1",
+        matchedMarketQuestion: "Will Apple beat Q1 2026 earnings estimates?",
+        riskFactors: {
+          divergenceScore: 30,
+          whaleActivityScore: 22,
+          timingUrgencyScore: 15,
+          volumeAnomalyScore: 5,
+        },
+      },
+      {
+        id: "TSLA-mock-2",
+        symbol: "TSLA",
+        companyName: "Tesla Inc.",
+        earningsDate: new Date(now + 2 * day).toISOString().split("T")[0],
+        daysUntilEarnings: 2,
+        insiderRiskScore: 85,
+        polymarketOdds: 0.78,
+        analystConsensus: 0.42,
+        divergence: 0.36,
+        suspiciousWhaleCount: 5,
+        volumeRatio: 4.2,
+        matchedMarketId: "mock-market-2",
+        matchedMarketQuestion: "Will Tesla beat Q4 earnings?",
+        riskFactors: {
+          divergenceScore: 40,
+          whaleActivityScore: 30,
+          timingUrgencyScore: 20,
+          volumeAnomalyScore: 7,
+        },
+      },
+      {
+        id: "NVDA-mock-3",
+        symbol: "NVDA",
+        companyName: "NVIDIA Corporation",
+        earningsDate: new Date(now + 12 * day).toISOString().split("T")[0],
+        daysUntilEarnings: 12,
+        insiderRiskScore: 58,
+        polymarketOdds: 0.82,
+        analystConsensus: 0.68,
+        divergence: 0.14,
+        suspiciousWhaleCount: 2,
+        volumeRatio: 1.8,
+        matchedMarketId: "mock-market-3",
+        matchedMarketQuestion: "Will NVIDIA beat Q1 2026 earnings?",
+        riskFactors: {
+          divergenceScore: 20,
+          whaleActivityScore: 15,
+          timingUrgencyScore: 5,
+          volumeAnomalyScore: 4,
+        },
+      },
+      {
+        id: "MSFT-mock-4",
+        symbol: "MSFT",
+        companyName: "Microsoft Corporation",
+        earningsDate: new Date(now + 3 * day).toISOString().split("T")[0],
+        daysUntilEarnings: 3,
+        insiderRiskScore: 65,
+        polymarketOdds: 0.72,
+        analystConsensus: 0.55,
+        divergence: 0.17,
+        suspiciousWhaleCount: 4,
+        volumeRatio: 2.3,
+        matchedMarketId: "mock-market-4",
+        matchedMarketQuestion: "Will Microsoft beat earnings estimates?",
+        riskFactors: {
+          divergenceScore: 20,
+          whaleActivityScore: 22,
+          timingUrgencyScore: 15,
+          volumeAnomalyScore: 4,
+        },
+      },
+      {
+        id: "GOOGL-mock-5",
+        symbol: "GOOGL",
+        companyName: "Alphabet Inc.",
+        earningsDate: new Date(now + 7 * day).toISOString().split("T")[0],
+        daysUntilEarnings: 7,
+        insiderRiskScore: 48,
+        polymarketOdds: 0.58,
+        analystConsensus: 0.62,
+        divergence: 0.04,
+        suspiciousWhaleCount: 1,
+        volumeRatio: 1.4,
+        matchedMarketId: "mock-market-5",
+        matchedMarketQuestion: "Will Google beat Q1 earnings?",
+        riskFactors: {
+          divergenceScore: 0,
+          whaleActivityScore: 8,
+          timingUrgencyScore: 10,
+          volumeAnomalyScore: 0,
+        },
+      },
+      {
+        id: "META-mock-6",
+        symbol: "META",
+        companyName: "Meta Platforms Inc.",
+        earningsDate: new Date(now + 8 * day).toISOString().split("T")[0],
+        daysUntilEarnings: 8,
+        insiderRiskScore: 55,
+        polymarketOdds: 0.65,
+        analystConsensus: 0.50,
+        divergence: 0.15,
+        suspiciousWhaleCount: 2,
+        volumeRatio: 2.1,
+        matchedMarketId: "mock-market-6",
+        matchedMarketQuestion: "Will Meta beat Q1 2026 earnings?",
+        riskFactors: {
+          divergenceScore: 20,
+          whaleActivityScore: 15,
+          timingUrgencyScore: 5,
+          volumeAnomalyScore: 4,
+        },
+      },
+    ].sort((a, b) => b.insiderRiskScore - a.insiderRiskScore);
+  }
+
+  async getEarningsStats(): Promise<EarningsStats> {
+    const alerts = await this.getEarningsAlerts();
+
+    return {
+      totalEarningsTracked: alerts.length,
+      matchedMarketsCount: alerts.filter((a) => a.matchedMarketId).length,
+      highRiskAlertsCount: alerts.filter((a) => a.insiderRiskScore >= 60).length,
+      avgDivergence:
+        alerts.length > 0
+          ? alerts.reduce((sum, a) => sum + a.divergence, 0) / alerts.length
+          : 0,
     };
   }
 }

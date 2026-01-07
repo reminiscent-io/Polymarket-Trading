@@ -12,6 +12,7 @@ import Wallets from "@/pages/wallets";
 import WalletDetail from "@/pages/wallet-detail";
 import Markets from "@/pages/markets";
 import Historical from "@/pages/historical";
+import Earnings from "@/pages/earnings";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/wallets/:id" component={WalletDetail} />
       <Route path="/markets" component={Markets} />
       <Route path="/historical" component={Historical} />
+      <Route path="/earnings" component={Earnings} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

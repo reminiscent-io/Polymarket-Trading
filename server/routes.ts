@@ -99,5 +99,26 @@ export async function registerRoutes(
     }
   });
 
+  // Earnings Insider Detection endpoints
+  app.get("/api/earnings", async (_req, res) => {
+    try {
+      const alerts = await storage.getEarningsAlerts();
+      res.json(alerts);
+    } catch (error) {
+      console.error("[API] Failed to fetch earnings alerts:", error);
+      res.status(500).json({ error: "Failed to fetch earnings data" });
+    }
+  });
+
+  app.get("/api/earnings/stats", async (_req, res) => {
+    try {
+      const stats = await storage.getEarningsStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("[API] Failed to fetch earnings stats:", error);
+      res.status(500).json({ error: "Failed to fetch earnings stats" });
+    }
+  });
+
   return httpServer;
 }

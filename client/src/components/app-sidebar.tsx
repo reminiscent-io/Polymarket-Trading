@@ -6,6 +6,7 @@ import {
   History,
   Settings,
   Shield,
+  DollarSign,
 } from "lucide-react";
 import {
   Sidebar,
@@ -40,6 +41,11 @@ const navigationItems = [
     title: "Historical",
     url: "/historical",
     icon: History,
+  },
+  {
+    title: "Earnings Insider",
+    url: "/earnings",
+    icon: DollarSign,
   },
 ];
 
