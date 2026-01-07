@@ -58,7 +58,8 @@
 
 #### Backend
 - Express.js API server
-- In-memory storage with 20 sample wallets across 10 markets
+- Live Polymarket data integration (Real-time wallet and market monitoring)
+- Financial Modeling Prep (FMP) integration for earnings data (with graceful mock fallback for 403/limit errors)
 - RESTful API endpoints:
   - `GET /api/stats` - Dashboard metrics
   - `GET /api/wallets` - All wallets
@@ -67,37 +68,11 @@
   - `GET /api/wallets/:id` - Single wallet with transactions
   - `GET /api/wallets/:id/risk-factors` - Risk breakdown
   - `GET /api/markets` - All markets
-  - `GET /api/markets/:id` - Single market
+  - `GET /api/earnings` - Earnings-related markets and alerts
 
 #### Risk Scoring Algorithm
-Five-factor scoring system (0-100 total):
-1. **Account Age**: Newer accounts score higher (max 20 pts)
-   - <7 days: 20 pts
-   - <14 days: 15 pts
-   - <30 days: 8 pts
-2. **Win Rate**: High accuracy is suspicious (max 20 pts)
-   - >85%: 20 pts
-   - >70%: 15 pts
-   - >60%: 8 pts
-3. **Portfolio Concentration**: Single-market focus is suspicious (max 20 pts)
-   - >80%: 20 pts
-   - >60%: 15 pts
-   - >40%: 8 pts
-4. **Timing Proximity**: Bets close to resolution are suspicious (max 20 pts)
-   - <24h: 20 pts
-   - <48h: 15 pts
-   - <72h: 8 pts
-5. **Position Size**: Large wallets are higher risk (max 20 pts)
-   - ≥$10,000: 20 pts
-   - ≥$2,500: 15 pts
-   - ≥$500: 8 pts
-   - <$500: 0 pts (low risk)
-
-Risk Thresholds:
-- Critical: 80-100
-- High: 60-79
-- Medium: 40-59
-- Low: 0-39
+- **Standard Risk (0-100)**: Account age, win rate, concentration, timing, position size.
+- **Earnings Insider Risk (0-100)**: Analyst divergence, whale activity, timing urgency, volume anomalies.
 
 ---
 
