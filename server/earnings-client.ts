@@ -82,7 +82,7 @@ const COMPANY_NAMES: Record<string, string> = {
 };
 
 class EarningsClient {
-  private readonly API_BASE = "https://financialmodelingprep.com/api/v3";
+  private readonly API_BASE = "https://financialmodelingprep.com/stable";
   private apiKey: string;
   private earningsCache: CacheEntry<EarningsEvent[]> | null = null;
   private sp500Cache: CacheEntry<string[]> | null = null;
@@ -138,7 +138,7 @@ class EarningsClient {
       .toISOString()
       .split("T")[0];
 
-    const url = `${this.API_BASE}/earning_calendar?from=${fromDate}&to=${toDate}&apikey=${this.apiKey}`;
+    const url = `${this.API_BASE}/earnings-calendar?from=${fromDate}&to=${toDate}&apikey=${this.apiKey}`;
 
     console.log(`[Earnings] Fetching earnings calendar: ${fromDate} to ${toDate}`);
 
@@ -228,7 +228,7 @@ class EarningsClient {
       return fallbackSymbols;
     }
 
-    const url = `${this.API_BASE}/sp500_constituent?apikey=${this.apiKey}`;
+    const url = `${this.API_BASE}/sp500-constituent?apikey=${this.apiKey}`;
 
     try {
       const response = await fetch(url);
