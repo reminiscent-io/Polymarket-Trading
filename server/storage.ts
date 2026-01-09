@@ -14,7 +14,42 @@ import {
   type EarningsStats,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { type IStorage } from "./storage-interface";
+import {
+  type IStorage,
+  type PaginationOptions,
+  type PaginatedResult,
+  DEFAULT_PAGINATION,
+} from "./storage-interface";
+import {
+  calculateRiskScore,
+  calculateRiskFactors,
+  shouldFlagWallet,
+  RISK_THRESHOLDS,
+} from "./risk-scoring";
+
+/**
+ * Helper function to paginate an array
+ */
+function paginate<T>(
+  items: T[],
+  options?: PaginationOptions
+): PaginatedResult<T> {
+  const limit = Math.min(
+    options?.limit ?? DEFAULT_PAGINATION.limit,
+    DEFAULT_PAGINATION.maxLimit
+  );
+  const offset = options?.offset ?? DEFAULT_PAGINATION.offset;
+  const total = items.length;
+  const data = items.slice(offset, offset + limit);
+
+  return {
+    data,
+    total,
+    limit,
+    offset,
+    hasMore: offset + data.length < total,
+  };
+}
 
 export type { IStorage };
 
@@ -25,83 +60,6 @@ function generateWalletAddress(): string {
     address += chars[Math.floor(Math.random() * chars.length)];
   }
   return address;
-}
-
-function calculateRiskScore(wallet: Partial<InsertWallet>): number {
-  let score = 0;
-
-  // Account Age (0-20 points)
-  const ageDays = wallet.accountAgeDays ?? 30;
-  if (ageDays < 7) score += 20;
-  else if (ageDays < 14) score += 15;
-  else if (ageDays < 30) score += 8;
-
-  // Win Rate (0-20 points)
-  const winRate = wallet.winRate ?? 0.5;
-  if (winRate > 0.85) score += 20;
-  else if (winRate > 0.7) score += 15;
-  else if (winRate > 0.6) score += 8;
-
-  // Portfolio Concentration (0-20 points)
-  const concentration = wallet.portfolioConcentration ?? 0.3;
-  if (concentration > 0.8) score += 20;
-  else if (concentration > 0.6) score += 15;
-  else if (concentration > 0.4) score += 8;
-
-  // Timing Proximity (0-20 points)
-  const timing = wallet.avgTimingProximity ?? 72;
-  if (timing < 24) score += 20;
-  else if (timing < 48) score += 15;
-  else if (timing < 72) score += 8;
-
-  // Position Size (0-20 points)
-  const volume = wallet.totalVolume ?? 0;
-  if (volume >= 10000) score += 20;
-  else if (volume >= 2500) score += 15;
-  else if (volume >= 500) score += 8;
-  // < $500 gets 0 points (low risk)
-
-  return Math.min(100, score);
-}
-
-function calculateRiskFactors(wallet: Wallet): RiskFactors {
-  const ageDays = wallet.accountAgeDays;
-  let accountAge = 0;
-  if (ageDays < 7) accountAge = 20;
-  else if (ageDays < 14) accountAge = 15;
-  else if (ageDays < 30) accountAge = 8;
-
-  const wr = wallet.winRate;
-  let winRateScore = 0;
-  if (wr > 0.85) winRateScore = 20;
-  else if (wr > 0.7) winRateScore = 15;
-  else if (wr > 0.6) winRateScore = 8;
-
-  const concentration = wallet.portfolioConcentration;
-  let concentrationScore = 0;
-  if (concentration > 0.8) concentrationScore = 20;
-  else if (concentration > 0.6) concentrationScore = 15;
-  else if (concentration > 0.4) concentrationScore = 8;
-
-  const timing = wallet.avgTimingProximity;
-  let timingScore = 0;
-  if (timing < 24) timingScore = 20;
-  else if (timing < 48) timingScore = 15;
-  else if (timing < 72) timingScore = 8;
-
-  const volume = wallet.totalVolume;
-  let positionSizeScore = 0;
-  if (volume >= 10000) positionSizeScore = 20;
-  else if (volume >= 2500) positionSizeScore = 15;
-  else if (volume >= 500) positionSizeScore = 8;
-
-  return {
-    accountAge,
-    winRate: winRateScore,
-    portfolioConcentration: concentrationScore,
-    timingProximity: timingScore,
-    positionSize: positionSizeScore,
-  };
 }
 
 export class MemStorage implements IStorage {
@@ -140,6 +98,7 @@ export class MemStorage implements IStorage {
 
       const market: Market = {
         id,
+        conditionId: id, // Use id as conditionId for mock data
         name: m.name,
         category: m.category,
         resolutionTime: resolutionDate,
@@ -199,7 +158,7 @@ export class MemStorage implements IStorage {
         accountAgeDays: profile.ageDays,
         portfolioConcentration: profile.concentration,
         avgTimingProximity: profile.timing,
-        isFlagged: riskScore >= 40,
+        isFlagged: shouldFlagWallet(riskScore),
         notes: null,
       };
 
@@ -226,6 +185,7 @@ export class MemStorage implements IStorage {
           id: randomUUID(),
           walletId: wallet.id,
           marketId: market.id,
+          marketTitle: market.name, // Store market name for mock data
           amount: Math.floor(Math.random() * 20000) + 1000,
           direction: Math.random() > 0.5 ? "Yes" : "No",
           timestamp: txDate,
@@ -245,7 +205,7 @@ export class MemStorage implements IStorage {
       const walletIds = new Set(marketTransactions.map((t) => t.walletId));
       const suspiciousWallets = Array.from(walletIds).filter((wid) => {
         const w = this.wallets.get(wid);
-        return w && w.riskScore >= 60;
+        return w && w.riskScore >= RISK_THRESHOLDS.HIGH;
       });
 
       const avgRisk =
@@ -275,20 +235,23 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  async getWallets(): Promise<Wallet[]> {
-    return Array.from(this.wallets.values()).sort((a, b) => b.riskScore - a.riskScore);
+  async getWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>> {
+    const sorted = Array.from(this.wallets.values()).sort((a, b) => b.riskScore - a.riskScore);
+    return paginate(sorted, options);
   }
 
-  async getFlaggedWallets(): Promise<Wallet[]> {
-    return Array.from(this.wallets.values())
-      .filter((w) => w.isFlagged && w.riskScore >= 40)
+  async getFlaggedWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>> {
+    const filtered = Array.from(this.wallets.values())
+      .filter((w) => w.isFlagged && w.riskScore >= RISK_THRESHOLDS.MEDIUM)
       .sort((a, b) => b.riskScore - a.riskScore);
+    return paginate(filtered, options);
   }
 
-  async getHistoricalWallets(): Promise<Wallet[]> {
-    return Array.from(this.wallets.values())
+  async getHistoricalWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>> {
+    const filtered = Array.from(this.wallets.values())
       .filter((w) => w.winRate > 0.7)
       .sort((a, b) => b.riskScore - a.riskScore);
+    return paginate(filtered, options);
   }
 
   async getWallet(id: string): Promise<Wallet | undefined> {
@@ -330,17 +293,18 @@ export class MemStorage implements IStorage {
       accountAgeDays: insertWallet.accountAgeDays ?? 0,
       portfolioConcentration: insertWallet.portfolioConcentration ?? 0,
       avgTimingProximity: insertWallet.avgTimingProximity ?? 72,
-      isFlagged: riskScore >= 40,
+      isFlagged: shouldFlagWallet(riskScore),
       notes: insertWallet.notes ?? null,
     };
     this.wallets.set(id, wallet);
     return wallet;
   }
 
-  async getMarkets(): Promise<Market[]> {
-    return Array.from(this.markets.values()).sort(
+  async getMarkets(options?: PaginationOptions): Promise<PaginatedResult<Market>> {
+    const sorted = Array.from(this.markets.values()).sort(
       (a, b) => b.suspiciousWalletCount - a.suspiciousWalletCount
     );
+    return paginate(sorted, options);
   }
 
   async getMarket(id: string): Promise<Market | undefined> {
@@ -351,6 +315,7 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const market: Market = {
       id,
+      conditionId: insertMarket.conditionId,
       name: insertMarket.name,
       category: insertMarket.category,
       resolutionTime: insertMarket.resolutionTime ?? null,
@@ -381,6 +346,7 @@ export class MemStorage implements IStorage {
       id,
       walletId: insertTransaction.walletId,
       marketId: insertTransaction.marketId,
+      marketTitle: insertTransaction.marketTitle ?? null,
       amount: insertTransaction.amount,
       direction: insertTransaction.direction,
       timestamp: insertTransaction.timestamp ?? new Date(),
@@ -393,14 +359,14 @@ export class MemStorage implements IStorage {
   }
 
   async getDashboardStats(): Promise<DashboardStats> {
-    const flagged = await this.getFlaggedWallets();
-    const highRisk = flagged.filter((w) => w.riskScore >= 60);
-    const markets = await this.getMarkets();
+    const flaggedResult = await this.getFlaggedWallets();
+    const highRisk = flaggedResult.data.filter((w) => w.riskScore >= RISK_THRESHOLDS.HIGH);
+    const marketsResult = await this.getMarkets();
 
     return {
-      totalFlaggedToday: flagged.length,
+      totalFlaggedToday: flaggedResult.total,
       highRiskCount: highRisk.length,
-      activeMarketsMonitored: markets.length,
+      activeMarketsMonitored: marketsResult.total,
       detectionAccuracy: 87,
     };
   }
@@ -546,7 +512,7 @@ export class MemStorage implements IStorage {
     return {
       totalEarningsTracked: alerts.length,
       matchedMarketsCount: alerts.filter((a) => a.matchedMarketId).length,
-      highRiskAlertsCount: alerts.filter((a) => a.insiderRiskScore >= 60).length,
+      highRiskAlertsCount: alerts.filter((a) => a.insiderRiskScore >= RISK_THRESHOLDS.HIGH).length,
       avgDivergence:
         alerts.length > 0
           ? alerts.reduce((sum, a) => sum + a.divergence, 0) / alerts.length
@@ -556,12 +522,25 @@ export class MemStorage implements IStorage {
 }
 
 import { PolymarketStorage } from "./polymarket-storage";
+import { PostgresStorage } from "./postgres-storage";
 
-// Use live Polymarket data by default, fall back to mock data with MOCK_DATA=true
-const useLiveData = process.env.MOCK_DATA !== "true";
+// Storage selection priority:
+// 1. USE_POSTGRES=true -> PostgreSQL with live Polymarket data
+// 2. MOCK_DATA=true -> In-memory with mock data
+// 3. Default -> In-memory with live Polymarket data
+const usePostgres = process.env.USE_POSTGRES === "true";
+const useMockData = process.env.MOCK_DATA === "true";
 
-export const storage: IStorage = useLiveData
-  ? new PolymarketStorage()
-  : new MemStorage();
+export const storage: IStorage = usePostgres
+  ? new PostgresStorage()
+  : useMockData
+    ? new MemStorage()
+    : new PolymarketStorage();
 
-console.log(`[Storage] Using ${useLiveData ? "LIVE Polymarket" : "MOCK"} data mode`);
+const storageMode = usePostgres
+  ? "PostgreSQL"
+  : useMockData
+    ? "MOCK"
+    : "LIVE Polymarket (in-memory)";
+
+console.log(`[Storage] Using ${storageMode} data mode`);

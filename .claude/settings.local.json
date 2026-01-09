@@ -5,7 +5,16 @@
       "WebFetch(domain:docs.polymarket.com)",
       "WebFetch(domain:github.com)",
       "Bash(npm run check:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(npm install:*)",
+      "Bash(npm test:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash([ -f .env ])",
+      "Bash(npm run build:*)"
     ]
   }
 }

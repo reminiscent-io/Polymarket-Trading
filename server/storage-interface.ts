@@ -19,20 +19,48 @@ import {
   type EarningsStats,
 } from "@shared/schema";
 
+/**
+ * Pagination options for list endpoints
+ */
+export interface PaginationOptions {
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Paginated result wrapper
+ */
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+/**
+ * Default pagination values
+ */
+export const DEFAULT_PAGINATION = {
+  limit: 50,
+  offset: 0,
+  maxLimit: 200,
+} as const;
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
 
-  getWallets(): Promise<Wallet[]>;
-  getFlaggedWallets(): Promise<Wallet[]>;
-  getHistoricalWallets(): Promise<Wallet[]>;
+  getWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>>;
+  getFlaggedWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>>;
+  getHistoricalWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>>;
   getWallet(id: string): Promise<Wallet | undefined>;
   getWalletWithTransactions(id: string): Promise<WalletWithTransactions | undefined>;
   getWalletRiskFactors(id: string): Promise<RiskFactors | undefined>;
   createWallet(wallet: InsertWallet): Promise<Wallet>;
 
-  getMarkets(): Promise<Market[]>;
+  getMarkets(options?: PaginationOptions): Promise<PaginatedResult<Market>>;
   getMarket(id: string): Promise<Market | undefined>;
   createMarket(market: InsertMarket): Promise<Market>;
 

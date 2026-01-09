@@ -41,13 +41,16 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+// Match server-side cache TTL of 5 minutes
+const STALE_TIME = 5 * 60 * 1000;
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      refetchOnWindowFocus: true,
+      staleTime: STALE_TIME,
       retry: false,
     },
     mutations: {

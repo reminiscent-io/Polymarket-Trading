@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RiskBadge } from "@/components/risk-badge";
-import type { Market } from "@shared/schema";
+import type { Market, PaginatedResult } from "@shared/schema";
 import { format, formatDistanceToNow } from "date-fns";
 
 function MarketsSkeleton() {
@@ -53,13 +53,15 @@ export default function Markets() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
-  const { data: markets, isLoading } = useQuery<Market[]>({
+  const { data: result, isLoading } = useQuery<PaginatedResult<Market>>({
     queryKey: ["/api/markets"],
   });
 
   if (isLoading) {
     return <MarketsSkeleton />;
   }
+
+  const markets = result?.data;
 
   const filteredMarkets = markets
     ?.filter((market) => {
@@ -201,7 +203,7 @@ export default function Markets() {
       {filteredMarkets && filteredMarkets.length > 0 && (
         <div className="text-sm text-muted-foreground">
           <p data-testid="text-market-count">
-            Showing {filteredMarkets.length} of {markets?.length ?? 0} markets
+            Showing {filteredMarkets.length} of {result?.total ?? 0} markets
           </p>
         </div>
       )}

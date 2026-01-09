@@ -21,9 +21,44 @@ import {
   type EarningsStats,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { type IStorage } from "./storage-interface";
+import {
+  type IStorage,
+  type PaginationOptions,
+  type PaginatedResult,
+  DEFAULT_PAGINATION,
+} from "./storage-interface";
 import { polymarketClient, type PolymarketMarket, type PolymarketTrade } from "./polymarket-client";
 import { earningsClient } from "./earnings-client";
+import {
+  calculateRiskScore,
+  calculateRiskFactors,
+  shouldFlagWallet,
+  RISK_THRESHOLDS,
+} from "./risk-scoring";
+
+/**
+ * Helper function to paginate an array
+ */
+function paginate<T>(
+  items: T[],
+  options?: PaginationOptions
+): PaginatedResult<T> {
+  const limit = Math.min(
+    options?.limit ?? DEFAULT_PAGINATION.limit,
+    DEFAULT_PAGINATION.maxLimit
+  );
+  const offset = options?.offset ?? DEFAULT_PAGINATION.offset;
+  const total = items.length;
+  const data = items.slice(offset, offset + limit);
+
+  return {
+    data,
+    total,
+    limit,
+    offset,
+    hasMore: offset + data.length < total,
+  };
+}
 
 // Map Polymarket categories from tags
 function categorizeMarket(market: PolymarketMarket): string {
@@ -49,85 +84,6 @@ function categorizeMarket(market: PolymarketMarket): string {
     return "Entertainment";
   }
   return "Other";
-}
-
-// Calculate risk score based on wallet behavior
-function calculateRiskScore(metrics: {
-  accountAgeDays: number;
-  winRate: number;
-  portfolioConcentration: number;
-  avgTimingProximity: number;
-  totalVolume: number;
-}): number {
-  let score = 0;
-
-  // Account age factor (0-20 points)
-  if (metrics.accountAgeDays < 7) score += 20;
-  else if (metrics.accountAgeDays < 14) score += 15;
-  else if (metrics.accountAgeDays < 30) score += 8;
-
-  // Win rate factor (0-20 points)
-  if (metrics.winRate > 0.85) score += 20;
-  else if (metrics.winRate > 0.7) score += 15;
-  else if (metrics.winRate > 0.6) score += 8;
-
-  // Portfolio concentration (0-20 points)
-  if (metrics.portfolioConcentration > 0.8) score += 20;
-  else if (metrics.portfolioConcentration > 0.6) score += 15;
-  else if (metrics.portfolioConcentration > 0.4) score += 8;
-
-  // Timing proximity (0-20 points)
-  if (metrics.avgTimingProximity < 24) score += 20;
-  else if (metrics.avgTimingProximity < 48) score += 15;
-  else if (metrics.avgTimingProximity < 72) score += 8;
-
-  // Position size (0-20 points)
-  if (metrics.totalVolume >= 10000) score += 20;
-  else if (metrics.totalVolume >= 2500) score += 15;
-  else if (metrics.totalVolume >= 500) score += 8;
-  // < $500 gets 0 points (low risk)
-
-  return Math.min(100, score);
-}
-
-function calculateRiskFactors(wallet: Wallet): RiskFactors {
-  const ageDays = wallet.accountAgeDays;
-  let accountAge = 0;
-  if (ageDays < 7) accountAge = 20;
-  else if (ageDays < 14) accountAge = 15;
-  else if (ageDays < 30) accountAge = 8;
-
-  const wr = wallet.winRate;
-  let winRateScore = 0;
-  if (wr > 0.85) winRateScore = 20;
-  else if (wr > 0.7) winRateScore = 15;
-  else if (wr > 0.6) winRateScore = 8;
-
-  const concentration = wallet.portfolioConcentration;
-  let concentrationScore = 0;
-  if (concentration > 0.8) concentrationScore = 20;
-  else if (concentration > 0.6) concentrationScore = 15;
-  else if (concentration > 0.4) concentrationScore = 8;
-
-  const timing = wallet.avgTimingProximity;
-  let timingScore = 0;
-  if (timing < 24) timingScore = 20;
-  else if (timing < 48) timingScore = 15;
-  else if (timing < 72) timingScore = 8;
-
-  const volume = wallet.totalVolume;
-  let positionSizeScore = 0;
-  if (volume >= 10000) positionSizeScore = 20;
-  else if (volume >= 2500) positionSizeScore = 15;
-  else if (volume >= 500) positionSizeScore = 8;
-
-  return {
-    accountAge,
-    winRate: winRateScore,
-    portfolioConcentration: concentrationScore,
-    timingProximity: timingScore,
-    positionSize: positionSizeScore,
-  };
 }
 
 // Company aliases for heuristic matching
@@ -235,6 +191,7 @@ export class PolymarketStorage implements IStorage {
   private convertPolymarketMarket(pm: PolymarketMarket): Market {
     return {
       id: pm.conditionId || pm.id,
+      conditionId: pm.conditionId || pm.id,
       name: pm.question || pm.slug,
       category: categorizeMarket(pm),
       resolutionTime: pm.endDate ? new Date(pm.endDate) : null,
@@ -299,7 +256,7 @@ export class PolymarketStorage implements IStorage {
           accountAgeDays,
           portfolioConcentration: analysis.marketConcentration,
           avgTimingProximity: Math.round(analysis.avgTimingHours),
-          isFlagged: riskScore >= 40,
+          isFlagged: shouldFlagWallet(riskScore),
           notes: null,
         };
 
@@ -314,6 +271,7 @@ export class PolymarketStorage implements IStorage {
             id: txId,
             walletId,
             marketId,
+            marketTitle: trade.title || null,
             amount: trade.size * trade.price,
             direction: trade.outcome || (trade.side === "BUY" ? "Yes" : "No"),
             timestamp: new Date(trade.timestamp * 1000),
@@ -348,7 +306,7 @@ export class PolymarketStorage implements IStorage {
       const walletIds = new Set(txs.map((t: Transaction) => t.walletId));
       const suspiciousWallets = Array.from(walletIds).filter((wid: string) => {
         const w = this.walletCache.get(wid);
-        return w && w.riskScore >= 60;
+        return w && w.riskScore >= RISK_THRESHOLDS.HIGH;
       });
 
       const avgRisk = suspiciousWallets.length > 0
@@ -380,23 +338,26 @@ export class PolymarketStorage implements IStorage {
     return user;
   }
 
-  async getWallets(): Promise<Wallet[]> {
+  async getWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>> {
     await this.refreshData();
-    return Array.from(this.walletCache.values()).sort((a, b) => b.riskScore - a.riskScore);
+    const sorted = Array.from(this.walletCache.values()).sort((a, b) => b.riskScore - a.riskScore);
+    return paginate(sorted, options);
   }
 
-  async getFlaggedWallets(): Promise<Wallet[]> {
+  async getFlaggedWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>> {
     await this.refreshData();
-    return Array.from(this.walletCache.values())
-      .filter(w => w.isFlagged && w.riskScore >= 40)
+    const filtered = Array.from(this.walletCache.values())
+      .filter(w => w.isFlagged && w.riskScore >= RISK_THRESHOLDS.MEDIUM)
       .sort((a, b) => b.riskScore - a.riskScore);
+    return paginate(filtered, options);
   }
 
-  async getHistoricalWallets(): Promise<Wallet[]> {
+  async getHistoricalWallets(options?: PaginationOptions): Promise<PaginatedResult<Wallet>> {
     await this.refreshData();
-    return Array.from(this.walletCache.values())
+    const filtered = Array.from(this.walletCache.values())
       .filter(w => w.winRate > 0.7)
       .sort((a, b) => b.riskScore - a.riskScore);
+    return paginate(filtered, options);
   }
 
   async getWallet(id: string): Promise<Wallet | undefined> {
@@ -447,18 +408,19 @@ export class PolymarketStorage implements IStorage {
       accountAgeDays: insertWallet.accountAgeDays ?? 0,
       portfolioConcentration: insertWallet.portfolioConcentration ?? 0,
       avgTimingProximity: insertWallet.avgTimingProximity ?? 72,
-      isFlagged: riskScore >= 40,
+      isFlagged: shouldFlagWallet(riskScore),
       notes: insertWallet.notes ?? null,
     };
     this.walletCache.set(id, wallet);
     return wallet;
   }
 
-  async getMarkets(): Promise<Market[]> {
+  async getMarkets(options?: PaginationOptions): Promise<PaginatedResult<Market>> {
     await this.refreshData();
-    return Array.from(this.marketCache.values()).sort(
+    const sorted = Array.from(this.marketCache.values()).sort(
       (a, b) => b.suspiciousWalletCount - a.suspiciousWalletCount
     );
+    return paginate(sorted, options);
   }
 
   async getMarket(id: string): Promise<Market | undefined> {
@@ -470,6 +432,7 @@ export class PolymarketStorage implements IStorage {
     const id = randomUUID();
     const market: Market = {
       id,
+      conditionId: insertMarket.conditionId,
       name: insertMarket.name,
       category: insertMarket.category,
       resolutionTime: insertMarket.resolutionTime ?? null,
@@ -502,6 +465,7 @@ export class PolymarketStorage implements IStorage {
       id,
       walletId: insertTransaction.walletId,
       marketId: insertTransaction.marketId,
+      marketTitle: insertTransaction.marketTitle ?? null,
       amount: insertTransaction.amount,
       direction: insertTransaction.direction,
       timestamp: insertTransaction.timestamp ?? new Date(),
@@ -515,14 +479,14 @@ export class PolymarketStorage implements IStorage {
 
   async getDashboardStats(): Promise<DashboardStats> {
     await this.refreshData();
-    const flagged = await this.getFlaggedWallets();
-    const highRisk = flagged.filter(w => w.riskScore >= 60);
-    const markets = await this.getMarkets();
+    const flaggedResult = await this.getFlaggedWallets();
+    const highRisk = flaggedResult.data.filter(w => w.riskScore >= RISK_THRESHOLDS.HIGH);
+    const marketsResult = await this.getMarkets();
 
     return {
-      totalFlaggedToday: flagged.length,
+      totalFlaggedToday: flaggedResult.total,
       highRiskCount: highRisk.length,
-      activeMarketsMonitored: markets.length,
+      activeMarketsMonitored: marketsResult.total,
       detectionAccuracy: 87, // Would need historical data to calculate
     };
   }
@@ -779,7 +743,7 @@ export class PolymarketStorage implements IStorage {
     return {
       totalEarningsTracked: alerts.length,
       matchedMarketsCount: alerts.filter((a) => a.matchedMarketId).length,
-      highRiskAlertsCount: alerts.filter((a) => a.insiderRiskScore >= 60).length,
+      highRiskAlertsCount: alerts.filter((a) => a.insiderRiskScore >= RISK_THRESHOLDS.HIGH).length,
       avgDivergence:
         alerts.length > 0
           ? alerts.reduce((sum, a) => sum + a.divergence, 0) / alerts.length

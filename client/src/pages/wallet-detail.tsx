@@ -256,8 +256,8 @@ export default function WalletDetail() {
                             {format(new Date(tx.timestamp), "MMM d, HH:mm")}
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm line-clamp-1" title={market?.name}>
-                              {market?.name ?? "Unknown Market"}
+                            <span className="text-sm line-clamp-1" title={tx.marketTitle ?? market?.name}>
+                              {tx.marketTitle ?? market?.name ?? "Unknown Market"}
                             </span>
                           </TableCell>
                           <TableCell>

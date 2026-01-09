@@ -1,6 +1,20 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { DEFAULT_PAGINATION, type PaginationOptions } from "./storage-interface";
+
+/**
+ * Parse pagination query parameters from request
+ */
+function parsePagination(query: { limit?: string; offset?: string }): PaginationOptions {
+  const limit = query.limit ? parseInt(query.limit, 10) : DEFAULT_PAGINATION.limit;
+  const offset = query.offset ? parseInt(query.offset, 10) : DEFAULT_PAGINATION.offset;
+
+  return {
+    limit: Number.isNaN(limit) ? DEFAULT_PAGINATION.limit : Math.min(limit, DEFAULT_PAGINATION.maxLimit),
+    offset: Number.isNaN(offset) ? DEFAULT_PAGINATION.offset : Math.max(0, offset),
+  };
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -15,28 +29,31 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/wallets", async (_req, res) => {
+  app.get("/api/wallets", async (req, res) => {
     try {
-      const wallets = await storage.getWallets();
-      res.json(wallets);
+      const pagination = parsePagination(req.query as { limit?: string; offset?: string });
+      const result = await storage.getWallets(pagination);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch wallets" });
     }
   });
 
-  app.get("/api/wallets/flagged", async (_req, res) => {
+  app.get("/api/wallets/flagged", async (req, res) => {
     try {
-      const wallets = await storage.getFlaggedWallets();
-      res.json(wallets);
+      const pagination = parsePagination(req.query as { limit?: string; offset?: string });
+      const result = await storage.getFlaggedWallets(pagination);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch flagged wallets" });
     }
   });
 
-  app.get("/api/wallets/historical", async (_req, res) => {
+  app.get("/api/wallets/historical", async (req, res) => {
     try {
-      const wallets = await storage.getHistoricalWallets();
-      res.json(wallets);
+      const pagination = parsePagination(req.query as { limit?: string; offset?: string });
+      const result = await storage.getHistoricalWallets(pagination);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch historical wallets" });
     }
@@ -68,10 +85,11 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/markets", async (_req, res) => {
+  app.get("/api/markets", async (req, res) => {
     try {
-      const markets = await storage.getMarkets();
-      res.json(markets);
+      const pagination = parsePagination(req.query as { limit?: string; offset?: string });
+      const result = await storage.getMarkets(pagination);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch markets" });
     }

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { RiskBadge } from "@/components/risk-badge";
 import { WalletAddress } from "@/components/wallet-address";
-import type { Wallet } from "@shared/schema";
+import type { Wallet, PaginatedResult } from "@shared/schema";
 
 function HistoricalSkeleton() {
   return (
@@ -42,7 +42,7 @@ function HistoricalSkeleton() {
 }
 
 export default function Historical() {
-  const { data: topWallets, isLoading } = useQuery<Wallet[]>({
+  const { data: result, isLoading } = useQuery<PaginatedResult<Wallet>>({
     queryKey: ["/api/wallets/historical"],
   });
 
@@ -50,6 +50,7 @@ export default function Historical() {
     return <HistoricalSkeleton />;
   }
 
+  const topWallets = result?.data;
   const topThree = topWallets?.slice(0, 3) ?? [];
   const restWallets = topWallets?.slice(3) ?? [];
 

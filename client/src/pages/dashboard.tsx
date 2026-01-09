@@ -15,7 +15,7 @@ import {
 import { MetricCard } from "@/components/metric-card";
 import { RiskBadge } from "@/components/risk-badge";
 import { WalletAddress } from "@/components/wallet-address";
-import type { DashboardStats, Wallet } from "@shared/schema";
+import type { DashboardStats, Wallet, PaginatedResult } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 function DashboardSkeleton() {
@@ -52,13 +52,15 @@ export default function Dashboard() {
     queryKey: ["/api/stats"],
   });
 
-  const { data: flaggedWallets, isLoading: walletsLoading } = useQuery<Wallet[]>({
+  const { data: flaggedResult, isLoading: walletsLoading } = useQuery<PaginatedResult<Wallet>>({
     queryKey: ["/api/wallets/flagged"],
   });
 
   if (statsLoading || walletsLoading) {
     return <DashboardSkeleton />;
   }
+
+  const flaggedWallets = flaggedResult?.data;
 
   return (
     <div className="space-y-6">

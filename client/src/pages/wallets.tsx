@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { RiskBadge } from "@/components/risk-badge";
 import { WalletAddress } from "@/components/wallet-address";
-import type { Wallet } from "@shared/schema";
+import type { Wallet, PaginatedResult } from "@shared/schema";
 
 function WalletsSkeleton() {
   return (
@@ -51,13 +51,15 @@ export default function Wallets() {
   const [volumeFilter, setVolumeFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("risk");
 
-  const { data: wallets, isLoading } = useQuery<Wallet[]>({
+  const { data: result, isLoading } = useQuery<PaginatedResult<Wallet>>({
     queryKey: ["/api/wallets"],
   });
 
   if (isLoading) {
     return <WalletsSkeleton />;
   }
+
+  const wallets = result?.data;
 
   const filteredWallets = wallets
     ?.filter((wallet) => {
@@ -263,7 +265,7 @@ export default function Wallets() {
       {filteredWallets && filteredWallets.length > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <p data-testid="text-wallet-count">
-            Showing {filteredWallets.length} of {wallets?.length ?? 0} wallets
+            Showing {filteredWallets.length} of {result?.total ?? 0} wallets
           </p>
         </div>
       )}
