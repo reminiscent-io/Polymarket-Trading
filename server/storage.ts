@@ -12,6 +12,8 @@ import {
   type RiskFactors,
   type EarningsInsiderAlert,
   type EarningsStats,
+  type UserPortfolio,
+  type PortfolioStats,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import {
@@ -518,6 +520,20 @@ export class MemStorage implements IStorage {
           ? alerts.reduce((sum, a) => sum + a.divergence, 0) / alerts.length
           : 0,
     };
+  }
+
+  // Portfolio tracking (not available in mock mode)
+
+  isPortfolioAvailable(): boolean {
+    return false;
+  }
+
+  async getUserPortfolio(): Promise<UserPortfolio> {
+    throw new Error("Portfolio tracking is not available in mock data mode. Set up Polymarket API credentials and disable MOCK_DATA to use this feature.");
+  }
+
+  async getPortfolioStats(): Promise<PortfolioStats> {
+    throw new Error("Portfolio tracking is not available in mock data mode. Set up Polymarket API credentials and disable MOCK_DATA to use this feature.");
   }
 }
 

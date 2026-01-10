@@ -17,6 +17,10 @@ import {
   type RiskFactors,
   type EarningsInsiderAlert,
   type EarningsStats,
+  type UserPortfolio,
+  type PortfolioStats,
+  type PortfolioPosition,
+  type PortfolioTrade,
   users,
   wallets,
   markets,
@@ -575,6 +579,93 @@ export class PostgresStorage implements IStorage {
       matchedMarketsCount: 0,
       highRiskAlertsCount: 0,
       avgDivergence: 0,
+    };
+  }
+
+  // ========== Portfolio Methods (Authenticated) ==========
+
+  isPortfolioAvailable(): boolean {
+    return polymarketClient.isAuthenticated();
+  }
+
+  async getUserPortfolio(): Promise<UserPortfolio> {
+    if (!this.isPortfolioAvailable()) {
+      throw new Error("Portfolio tracking requires authentication. Configure POLYMARKET_API_KEY, POLYMARKET_API_SECRET, and POLYMARKET_WALLET_ADDRESS in Replit Secrets.");
+    }
+
+    const portfolio = await polymarketClient.getUserPortfolio();
+
+    // Convert to shared schema format
+    return {
+      totalValue: portfolio.totalValue,
+      unrealizedPnl: portfolio.unrealizedPnl,
+      realizedPnl: portfolio.realizedPnl,
+      balance: portfolio.balance,
+      cashBalance: portfolio.cashBalance,
+      totalEquity: portfolio.totalEquity,
+      positions: portfolio.positions.map((pos): PortfolioPosition => ({
+        asset: pos.asset,
+        conditionId: pos.conditionId,
+        marketQuestion: pos.marketQuestion,
+        marketSlug: pos.marketSlug,
+        outcome: pos.outcome || "Unknown",
+        size: pos.size,
+        avgPrice: pos.avgPrice || 0,
+        currentPrice: pos.currentPrice || 0,
+        value: pos.value,
+        unrealizedPnl: pos.unrealizedPnl,
+        realizedPnl: pos.realizedPnl,
+        roi: pos.roi,
+      })),
+      recentTrades: portfolio.recentTrades.map((trade): PortfolioTrade => ({
+        transactionHash: trade.transactionHash,
+        side: trade.side,
+        marketQuestion: trade.title || trade.name || "Unknown Market",
+        outcome: trade.outcome,
+        size: trade.size,
+        price: trade.price,
+        timestamp: trade.timestamp,
+        value: trade.size * trade.price,
+      })),
+    };
+  }
+
+  async getPortfolioStats(): Promise<PortfolioStats> {
+    const portfolio = await this.getUserPortfolio();
+
+    const { positions } = portfolio;
+    const totalPnl = portfolio.unrealizedPnl + portfolio.realizedPnl;
+
+    // Find best and worst positions
+    let bestPosition: PortfolioPosition | null = null;
+    let worstPosition: PortfolioPosition | null = null;
+
+    for (const pos of positions) {
+      if (!bestPosition || pos.unrealizedPnl > bestPosition.unrealizedPnl) {
+        bestPosition = pos;
+      }
+      if (!worstPosition || pos.unrealizedPnl < worstPosition.unrealizedPnl) {
+        worstPosition = pos;
+      }
+    }
+
+    // Calculate win rate from trades
+    const trades = portfolio.recentTrades;
+    const profitableTrades = trades.filter((t) => {
+      // Simplified: consider SELL trades at high price or BUY at low price as profitable
+      if (t.side === "SELL" && t.price > 0.5) return true;
+      if (t.side === "BUY" && t.price < 0.5) return true;
+      return false;
+    });
+    const winRate = trades.length > 0 ? profitableTrades.length / trades.length : 0;
+
+    return {
+      totalPositions: positions.length,
+      totalValue: portfolio.totalValue,
+      totalPnl,
+      winRate,
+      bestPosition,
+      worstPosition,
     };
   }
 }

@@ -7,6 +7,7 @@ import {
   Settings,
   Shield,
   DollarSign,
+  PieChart,
 } from "lucide-react";
 import {
   Sidebar,
@@ -46,6 +47,11 @@ const navigationItems = [
     title: "Earnings Insider",
     url: "/earnings",
     icon: DollarSign,
+  },
+  {
+    title: "Portfolio",
+    url: "/portfolio",
+    icon: PieChart,
   },
 ];
 

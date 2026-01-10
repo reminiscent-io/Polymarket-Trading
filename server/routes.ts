@@ -138,5 +138,56 @@ export async function registerRoutes(
     }
   });
 
+  // Portfolio tracking endpoints (Authenticated)
+  app.get("/api/portfolio", async (_req, res) => {
+    try {
+      if (!storage.isPortfolioAvailable()) {
+        return res.status(503).json({
+          error: "Portfolio tracking not available",
+          message: "Configure POLYMARKET_API_KEY, POLYMARKET_API_SECRET, and POLYMARKET_WALLET_ADDRESS in Replit Secrets to enable portfolio tracking."
+        });
+      }
+
+      const portfolio = await storage.getUserPortfolio();
+      res.json(portfolio);
+    } catch (error) {
+      console.error("[API] Failed to fetch portfolio:", error);
+      res.status(500).json({
+        error: "Failed to fetch portfolio",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/portfolio/stats", async (_req, res) => {
+    try {
+      if (!storage.isPortfolioAvailable()) {
+        return res.status(503).json({
+          error: "Portfolio tracking not available",
+          message: "Configure POLYMARKET_API_KEY, POLYMARKET_API_SECRET, and POLYMARKET_WALLET_ADDRESS in Replit Secrets to enable portfolio tracking."
+        });
+      }
+
+      const stats = await storage.getPortfolioStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("[API] Failed to fetch portfolio stats:", error);
+      res.status(500).json({
+        error: "Failed to fetch portfolio stats",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/portfolio/available", async (_req, res) => {
+    try {
+      const available = storage.isPortfolioAvailable();
+      res.json({ available });
+    } catch (error) {
+      console.error("[API] Failed to check portfolio availability:", error);
+      res.status(500).json({ error: "Failed to check portfolio availability" });
+    }
+  });
+
   return httpServer;
 }

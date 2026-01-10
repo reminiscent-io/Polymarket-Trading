@@ -17,6 +17,8 @@ import {
   type RiskFactors,
   type EarningsInsiderAlert,
   type EarningsStats,
+  type UserPortfolio,
+  type PortfolioStats,
 } from "@shared/schema";
 
 /**
@@ -73,4 +75,9 @@ export interface IStorage {
   // Earnings Insider Detection
   getEarningsAlerts(): Promise<EarningsInsiderAlert[]>;
   getEarningsStats(): Promise<EarningsStats>;
+
+  // Portfolio Tracking (Authenticated)
+  getUserPortfolio(): Promise<UserPortfolio>;
+  getPortfolioStats(): Promise<PortfolioStats>;
+  isPortfolioAvailable(): boolean;
 }

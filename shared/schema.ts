@@ -150,3 +150,50 @@ export interface EarningsStats {
   highRiskAlertsCount: number;
   avgDivergence: number;
 }
+
+// Portfolio tracking types
+export interface PortfolioPosition {
+  asset: string;
+  conditionId: string;
+  marketQuestion: string;
+  marketSlug: string;
+  outcome: string;
+  size: number;
+  avgPrice: number;
+  currentPrice: number;
+  value: number;
+  unrealizedPnl: number;
+  realizedPnl: number;
+  roi: number;
+}
+
+export interface PortfolioTrade {
+  transactionHash: string;
+  side: "BUY" | "SELL";
+  marketQuestion: string;
+  outcome: string;
+  size: number;
+  price: number;
+  timestamp: number;
+  value: number;
+}
+
+export interface UserPortfolio {
+  totalValue: number;
+  unrealizedPnl: number;
+  realizedPnl: number;
+  balance: number;
+  cashBalance: number;
+  totalEquity: number;
+  positions: PortfolioPosition[];
+  recentTrades: PortfolioTrade[];
+}
+
+export interface PortfolioStats {
+  totalPositions: number;
+  totalValue: number;
+  totalPnl: number;
+  winRate: number;
+  bestPosition: PortfolioPosition | null;
+  worstPosition: PortfolioPosition | null;
+}
