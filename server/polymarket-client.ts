@@ -676,7 +676,36 @@ class PolymarketClient {
 
       const enrichedPositions: PortfolioPosition[] = positions.map(pos => {
         const market = marketMap.get(pos.conditionId);
-        const currentPrice = market?.lastTradePrice || pos.currentPrice || 0;
+
+        // Get outcome-specific current price
+        // Priority: 1) position's current price, 2) market outcome prices, 3) last trade price, 4) mid-price, 5) position value
+        let currentPrice = 0;
+        let priceSource = "default";
+
+        if (pos.currentPrice !== undefined && pos.currentPrice !== null && pos.currentPrice > 0) {
+          // Use current price from position data (most accurate)
+          currentPrice = pos.currentPrice;
+          priceSource = "position.currentPrice";
+        } else if (market?.outcomePrices && pos.outcomeIndex !== undefined && market.outcomePrices[pos.outcomeIndex]) {
+          // Use outcome-specific price from market data
+          currentPrice = parseFloat(market.outcomePrices[pos.outcomeIndex]);
+          priceSource = "market.outcomePrices";
+        } else if (market?.lastTradePrice && market.lastTradePrice > 0) {
+          // Fall back to last trade price
+          currentPrice = market.lastTradePrice;
+          priceSource = "market.lastTradePrice";
+        } else if (market?.bestBid && market?.bestAsk && market.bestBid > 0 && market.bestAsk > 0) {
+          // Calculate mid-price from bid/ask
+          currentPrice = (market.bestBid + market.bestAsk) / 2;
+          priceSource = "market.midPrice";
+        } else if (pos.size > 0 && pos.value) {
+          // Calculate from position value as last resort
+          currentPrice = pos.value / pos.size;
+          priceSource = "calculated";
+        }
+
+        console.log(`[Polymarket] Position ${pos.asset.slice(0,8)} price: $${currentPrice.toFixed(4)} (source: ${priceSource})`);
+
         const avgPrice = pos.avgPrice || 0;
         const positionValue = pos.size * currentPrice;
         const costBasis = pos.size * avgPrice;
